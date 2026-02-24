@@ -32,7 +32,7 @@ def accel(pos, m, G=150.0, eps=10.0):
     inv_d3 = 1.0 / (d2 * np.sqrt(d2))
     return G * np.sum(r * inv_d3[:, :, None] * m[None, :, None], axis=1)
 
-def simulate(pos, vel, m, steps=5000, dt=0.001, G=150.0, eps=10.0):
+def simulate(pos, vel, m, steps=5000, dt=0.0005, G=150.0, eps=10.0):
     N = pos.shape[0]
     traj = np.empty((steps + 1, N, 2), float)
     traj[0] = pos
@@ -45,13 +45,13 @@ def simulate(pos, vel, m, steps=5000, dt=0.001, G=150.0, eps=10.0):
         traj[k] = pos
     return traj
 
-N, steps, dt = 15, 5000, 0.001
+N, steps, dt = 15, 10000, 0.0005 # actual input values
 pos0, vel0, m = init_nbody(N, bounds=(0, 250), min_dist=20.0, mass_range=(50, 200),
                            speed_scale=8.0, seed=9)
 traj = simulate(pos0, vel0, m, steps=steps, dt=dt, G=150.0, eps=10.0)
 
 # steps
-stride = 50
+stride = 25
 
 frames = range(0, steps + 1, stride)
 
@@ -63,15 +63,24 @@ ax.set_xlabel(r"$x$")
 ax.set_ylabel(r"$y$")
 ax.set_title("N-body Gravitation Animation")
 
-colors = plt.cm.tab20(np.linspace(0, 1, N))
+# Color by mass: light -> heavy
+norm = plt.Normalize(m.min(), m.max())
+cmap = plt.cm.viridis
+colors = cmap(norm(m))   # shape (N,4)
 
-# animated artists
-points = []
-trails = []
+sizes = 3 + 4 * np.sqrt(m / m.max())
 
-for c in colors:
+# Add a colorbar (static, drawn once)
+sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+sm.set_array([])
+plt.colorbar(sm, ax=ax, label="Mass")
+
+points, trails = [], []
+
+for i in range(N):
+    c = colors[i]
     trail, = ax.plot([], [], '-', color=c, lw=1.0, alpha=0.6)
-    point, = ax.plot([], [], 'o', color=c, ms=4)
+    point, = ax.plot([], [], 'o', color=c, ms=float(sizes[i]))
     trails.append(trail)
     points.append(point)
 
@@ -85,10 +94,8 @@ def update(frame):
     for i in range(N):
         x = traj[:frame+1, i, 0]
         y = traj[:frame+1, i, 1]
-
         trails[i].set_data(x, y)
         points[i].set_data([x[-1]], [y[-1]])
-
     return points + trails
 
 ani = FuncAnimation(
@@ -96,12 +103,14 @@ ani = FuncAnimation(
     update,
     frames=frames,
     init_func=init,
-    interval=20,   # ms between frames (~50 fps)
+    interval=20,
     blit=True
 )
 
 plt.close(fig)
-ani.save("nbody_animation.gif", writer="pillow", fps=10)
+
+# Save GIF (GitHub-friendly)
+ani.save("nbody_animation.gif", writer="pillow", fps=24)
 
 
 # ------------------------------------------------------------------------#
